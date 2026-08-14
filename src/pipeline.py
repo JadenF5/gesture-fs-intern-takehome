@@ -15,12 +15,14 @@ Useful docs:
 import os
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from src.knowledge_base import build_knowledge_base
+from typing import Callable
+import argparse
 
 
 # ──────────────────────────────────────────────
 # Provided: local LLM (no API key needed)
 # ──────────────────────────────────────────────
-def get_llm():
+def get_llm() -> Callable[[str], list[dict]]:
     """Return a callable local LLM using flan-t5-base.
 
     Downloads ~1GB on first run, then cached.
@@ -81,13 +83,23 @@ def ask_question(vector_store, llm, question: str) -> dict:
             "sources" -> list[str]: the chunk texts that were retrieved
     """
     # TODO: implement this (~6-8 lines)
-    raise NotImplementedError("TODO 1: Implement ask_question")
+    if not question or not question.strip():
+        return {"answer": "Ask a non-empty question.", "sources": []}
+    docs = vector_store.similarity_search(question, k=3)
+    if not docs:
+        return {"answer": "I don't have enough information to answer that.", "sources": []}
+    text = " ".join([chunk.page_content for chunk in docs])
+    prompt = PROMPT_TEMPLATE.format(context=text, question=question)
+    result = llm(prompt)
+    answer = result[0]["generated_text"]
+
+    return {"answer": answer, "sources": [chunk.page_content for chunk in docs]}
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # TODO 2: Complete the interactive loop
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def main():
+def main() -> None:
     """Interactive Q&A loop.
 
     Steps:
@@ -100,11 +112,45 @@ def main():
          - Calls ask_question() with their input
          - Prints the retrieved sources and the answer
     """
+
+    parser = argparse.ArgumentParser(description="Interactive Q&A Pipeline")
+    parser.add_argument("--query", type=str, help="Question to ask the knowledge base and exit immediately")
+    args = parser.parse_args()
+
     data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
 
     # TODO: implement this (~10-12 lines)
-    raise NotImplementedError("TODO 2: Complete the interactive loop")
+    if not os.path.isdir(data_dir):
+        print(f"Data directory '{data_dir}' does not exist. Please create it and add .txt files.")
+        return
+    try:
+        vector_store = build_knowledge_base(data_dir)
+    except Exception as e:
+        print(f"Error building knowledge base: {e}")
+        return
+    llm = get_llm()
 
+    if args.query:
+        result = ask_question(vector_store, llm, args.query)
+        print("\nSources:")
+        for source in result["sources"]:
+            print(source)
+        print("Answer:")
+        print(result["answer"])
+        return
+
+    while True:
+        input_question = input("Ask a question (or type 'quit' to exit): ")
+        if input_question.lower() == "quit":
+            break
+        if not input_question:
+            continue
+        result = ask_question(vector_store, llm, input_question)
+        print("\nSources:")
+        for source in result["sources"]:
+            print(source)
+        print("Answer:")
+        print(result["answer"])
 
 if __name__ == "__main__":
     main()

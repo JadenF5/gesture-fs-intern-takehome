@@ -95,3 +95,24 @@ class TestAnswerGeneration:
         assert "2,500" in answer or "2500" in answer or "starter" in answer, (
             "Answer should address the pricing question"
         )
+
+# ────────────────────────────────────
+# My own tests: Test Error Handling
+# ────────────────────────────────────
+class TestErrorHandling:
+    def test_empty_question_returns_gracefully(self, vector_store, llm):
+        result = ask_question(vector_store, llm, "")
+        assert result["answer"] != ""
+        assert result["sources"] == []
+
+    def test_whitespace_only_question(self, vector_store, llm):
+        result = ask_question(vector_store, llm, "   ")
+        assert result["sources"] == []
+
+# ────────────────────────────────────
+# My own tests: Test Source Content
+# ────────────────────────────────────
+class TestSourceCount:
+    def test_returns_at_most_three_sources(self, vector_store, llm):
+        result = ask_question(vector_store, llm, "What services do you offer?")
+        assert len(result["sources"]) <= 3
